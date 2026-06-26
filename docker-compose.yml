@@ -1,0 +1,32 @@
+# docker-compose.yml
+
+services:
+  postgres:
+    image: postgres:16-alpine        # Alpine keeps the image small (~80MB vs ~400MB)
+    container_name: wallet_postgres
+    restart: unless-stopped          # Survives Docker daemon restarts; stops only on explicit down
+
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-wallet_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wallet_pass}
+      POSTGRES_DB:       ${POSTGRES_DB:-wallet_db}
+
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432" # Left side = host port (overridable); right = container port
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # Named volume: survives container recreations
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+        # Postgres runs every *.sql file in initdb.d/ on first boot (empty volume only).
+        # :ro = container cannot modify your schema file.
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wallet_user} -d ${POSTGRES_DB:-wallet_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s             # Grace period before health failures count
+
+volumes:
+  postgres_data:
+    driver: local                   # Data lives on the host; survives docker compose down
